@@ -151,6 +151,7 @@ tbody tr:hover{background:#f8fafc}
       <button data-route="is">Issue Slips</button>
       <button data-route="inventory">Inventory</button>
       <button data-route="masters" data-admin>Masters</button>
+      <button data-route="isform" data-admin>IS Form Setup</button>
       <button data-route="users" data-admin>Users</button>
     </nav>
     <div class="userbox">
@@ -166,16 +167,29 @@ tbody tr:hover{background:#f8fafc}
 <div id="toastRoot"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
 /* ====================== CONFIG ====================== */
 const SUPABASE_URL = "https://emkcwukiqxnvcbhkjiqz.supabase.co";
 const SUPABASE_KEY = "sb_publishable_u_qnmEI8oHI9Z_A0-Hht3Q_Yvaa7Ork";
 const COMPANY = { name:"FOODSOLUTIONS INC.", addr:"Receiving & Issuance Management System" };
 const TXN_TYPES = ["PURCHASE","STOCK TRANSFER","RETURN","ADJUSTMENT","PRODUCTION"];
+// Default Issue Slip calibration (pre-printed half-letter landscape 612x396 pt), seeded from MEATPLUS
+const DEFAULT_SETTINGS = {
+  font:"helvetica", fontSize:9, page:{w:612,h:396},
+  calMap:{
+    is_code:{x:470,y:42}, slip_no:{x:470,y:58},
+    date:{x:86.6,y:75.8}, origin:{x:252,y:76.8},
+    rowTop:118.9, rowHeight:18,
+    cols:{item:30, brand:210, boxes:330, net:400, actual:470},
+    sign:{ issued_by:{x:48,y:328.3}, transport:{x:180.9,y:328.3}, checker:{x:340.9,y:329.3}, received_by:{x:472.2,y:332.2} }
+  }
+};
 
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth:{ persistSession:true, autoRefreshToken:true }});
 let ME = null;            // profile {id,email,full_name,role}
 let CACHE = { suppliers:[], storages:[], items:[], brands:[] };
+let SETTINGS = DEFAULT_SETTINGS;   // issue slip calibration, loaded from DB
 
 /* ====================== HELPERS ====================== */
 const $ = s => document.querySelector(s);
@@ -228,13 +242,15 @@ async function boot(){
 }
 
 async function refreshCache(){
-  const [s,st,it,br] = await Promise.all([
+  const [s,st,it,br,se] = await Promise.all([
     sb.from('fsisrr_suppliers').select('*').order('name'),
     sb.from('fsisrr_storages').select('*').order('name'),
     sb.from('fsisrr_item_master').select('*').order('name'),
     sb.from('fsisrr_brand_master').select('*').order('name'),
+    sb.from('fsisrr_issue_settings').select('config').eq('id',1).maybeSingle(),
   ]);
   CACHE.suppliers=s.data||[]; CACHE.storages=st.data||[]; CACHE.items=it.data||[]; CACHE.brands=br.data||[];
+  if(se.data && se.data.config && se.data.config.calMap) SETTINGS = se.data.config;
 }
 
 /* ====================== ROUTER ====================== */
@@ -249,6 +265,7 @@ function route(r){
   if(r==='is') return renderISList(v);
   if(r==='inventory') return renderInventory(v);
   if(r==='masters') return renderMasters(v);
+  if(r==='isform') return renderISForm(v);
   if(r==='users') return renderUsers(v);
 }
 
@@ -753,28 +770,140 @@ function printRR(r){
     </div></div>`;
   window.print();
 }
+// Issue Slip prints as an OVERLAY onto pre-printed half-letter forms:
+// only the field values are placed at calibrated coordinates (no form graphics).
 function printIS(s){
+  if(!(window.jspdf && window.jspdf.jsPDF)){ toast('PDF engine not loaded — check your connection'); return; }
+  const cfg = (SETTINGS && SETTINGS.calMap) ? SETTINGS : DEFAULT_SETTINGS;
+  const cm = cfg.calMap;
+  const pw = (cfg.page&&cfg.page.w)||612, ph=(cfg.page&&cfg.page.h)||396;
+  const doc = new window.jspdf.jsPDF({ unit:'pt', format:[pw,ph] });
+  doc.setFont(cfg.font||'helvetica','normal');
+  doc.setFontSize(cfg.fontSize||9);
+  const put=(p,t,align)=>{ if(!p||t==null||t==='')return; doc.text(String(t), p.x, p.y, align?{align:align}:undefined); };
+  put(cm.is_code, s.is_code);
+  put(cm.slip_no, s.slip_no);
+  put(cm.date, s.is_date);
+  put(cm.origin, s.origin);
   const items=(s.items||[]).sort((a,b)=>a.line_no-b.line_no);
-  const rows=items.map((it,i)=>`<tr><td>${i+1}</td><td>${esc(it.item||'')}</td><td>${esc(it.brand||'')}</td>
-    <td style="text-align:right">${fmt(it.number_of_boxes)}</td><td style="text-align:right">${fmt(it.net_weight)}</td>
-    <td style="text-align:right">${fmt(it.actual_weight)}</td></tr>`).join('');
-  const tb=items.reduce((a,i)=>a+Number(i.number_of_boxes||0),0), tw=items.reduce((a,i)=>a+Number(i.net_weight||0),0),
-    ta=items.reduce((a,i)=>a+Number(i.actual_weight||0),0);
-  $('#printArea').innerHTML=`<div class="doc">${docHead('ISSUE SLIP')}
-    <div class="d-meta">
-      <div><b>IS Code:</b> ${esc(s.is_code||'')}</div><div><b>Slip No:</b> ${esc(s.slip_no||'')}</div>
-      <div><b>Date:</b> ${esc(s.is_date||'')}</div><div><b>Origin:</b> ${esc(s.origin||'')}</div>
-      <div><b>Issued By:</b> ${esc(s.issued_by||'')}</div><div><b>Transport:</b> ${esc(s.transport||'')}</div>
-    </div>
-    <table><thead><tr><th>#</th><th>Item</th><th>Brand</th><th>Boxes</th><th>Net Wt</th><th>Actual Wt</th></tr></thead>
-    <tbody>${rows}<tr><td colspan="3" style="text-align:right"><b>TOTAL</b></td>
-      <td style="text-align:right"><b>${fmt(tb)}</b></td><td style="text-align:right"><b>${fmt(tw)}</b></td><td style="text-align:right"><b>${fmt(ta)}</b></td></tr></tbody></table>
-    <div class="sign">
-      ${sign('Issued By',s.issued_by)}${sign('Transport',s.transport)}${sign('Checker',s.checker)}${sign('Received By',s.received_by)}
-    </div></div>`;
-  window.print();
+  const top=cm.rowTop||118.9, rowH=cm.rowHeight||18, c=cm.cols||{};
+  items.forEach((it,i)=>{
+    const y=top + i*rowH;
+    if(c.item!=null)   doc.text(String(it.item||''), c.item, y);
+    if(c.brand!=null)  doc.text(String(it.brand||''), c.brand, y);
+    if(c.boxes!=null && it.number_of_boxes!=null) doc.text(fmt(it.number_of_boxes), c.boxes, y, {align:'right'});
+    if(c.net!=null && it.net_weight!=null)        doc.text(fmt(it.net_weight), c.net, y, {align:'right'});
+    if(c.actual!=null && it.actual_weight!=null)  doc.text(fmt(it.actual_weight), c.actual, y, {align:'right'});
+  });
+  const sg=cm.sign||{};
+  put(sg.issued_by, s.issued_by, 'center');
+  put(sg.transport, s.transport, 'center');
+  put(sg.checker, s.checker, 'center');
+  put(sg.received_by, s.received_by, 'center');
+  doc.autoPrint();
+  window.open(doc.output('bloburl'), '_blank');
 }
 const sign=(label,name)=>`<div class="s"><div class="nm">${esc(name||'')}</div><div class="ln">${esc(label)}</div></div>`;
+
+/* ====================== ISSUE SLIP FORM CALIBRATION (admin) ====================== */
+function renderISForm(v){
+  if(!isAdmin()){ v.innerHTML='<div class="card">Admin access required.</div>'; return; }
+  const cfg = JSON.parse(JSON.stringify((SETTINGS&&SETTINGS.calMap)?SETTINGS:DEFAULT_SETTINGS));
+  const cm = cfg.calMap;
+  v.innerHTML = `<div class="page-head"><h2>Issue Slip Form Setup</h2>
+    <div class="toolbar">
+      <button class="btn sm gray" id="calReset">Reset to defaults</button>
+      <button class="btn sm ghost" id="calTest">Test Print</button>
+      <button class="btn sm" id="calSave">Save Calibration</button>
+    </div></div>
+    <div class="muted" style="margin-bottom:14px">Coordinates are in points (72 pt = 1 inch), measured from the top-left of the sheet. Adjust until the values land in the blanks of your pre-printed Issue Slip, then Save. Page is ${cfg.page.w}&times;${cfg.page.h} pt (half-letter landscape).</div>
+    <div class="grid2">
+      <div class="card">
+        <h3>Page &amp; Font</h3>
+        <div class="grid3">
+          ${numF('page.w','Page width (pt)',cfg.page.w)}
+          ${numF('page.h','Page height (pt)',cfg.page.h)}
+          ${numF('fontSize','Font size',cfg.fontSize)}
+        </div>
+        <h3 style="margin-top:18px">Header fields (x, y)</h3>
+        ${xyF('calMap.is_code','IS Code',cm.is_code)}
+        ${xyF('calMap.slip_no','Slip No',cm.slip_no)}
+        ${xyF('calMap.date','Date',cm.date)}
+        ${xyF('calMap.origin','Origin',cm.origin)}
+        <h3 style="margin-top:18px">Line item rows</h3>
+        <div class="grid2">
+          ${numF('calMap.rowTop','First row Y (top)',cm.rowTop)}
+          ${numF('calMap.rowHeight','Row height (line spacing)',cm.rowHeight)}
+        </div>
+        <h3 style="margin-top:18px">Column X positions</h3>
+        <div class="grid3">
+          ${numF('calMap.cols.item','Item',cm.cols.item)}
+          ${numF('calMap.cols.brand','Brand',cm.cols.brand)}
+          ${numF('calMap.cols.boxes','Boxes (right)',cm.cols.boxes)}
+          ${numF('calMap.cols.net','Net wt (right)',cm.cols.net)}
+          ${numF('calMap.cols.actual','Actual wt (right)',cm.cols.actual)}
+        </div>
+        <h3 style="margin-top:18px">Signatures (x, y — centered)</h3>
+        ${xyF('calMap.sign.issued_by','Issued By',cm.sign.issued_by)}
+        ${xyF('calMap.sign.transport','Transport',cm.sign.transport)}
+        ${xyF('calMap.sign.checker','Checker',cm.sign.checker)}
+        ${xyF('calMap.sign.received_by','Received By',cm.sign.received_by)}
+      </div>
+      <div class="card">
+        <h3>Live Preview</h3>
+        <div class="muted" style="margin-bottom:8px">Approximate placement on a blank sheet (sample data shown).</div>
+        <div id="calPreview" style="position:relative;border:1px solid var(--line);background:#fff"></div>
+      </div>
+    </div>`;
+  function numF(path,label,val){
+    return `<div class="fld"><label>${label}</label><input data-path="${path}" type="number" step="any" value="${val}"></div>`;
+  }
+  function xyF(path,label,p){ p=p||{x:0,y:0};
+    return `<div class="fld"><label>${label}</label><div class="grid2">
+      <input data-path="${path}.x" type="number" step="any" value="${p.x}" placeholder="x">
+      <input data-path="${path}.y" type="number" step="any" value="${p.y}" placeholder="y"></div></div>`;
+  }
+  function setPath(obj,path,val){ const k=path.split('.'); let o=obj; for(let i=0;i<k.length-1;i++){ if(o[k[i]]==null)o[k[i]]={}; o=o[k[i]]; } o[k[k.length-1]]=val; }
+  const sample={ is_code:'IS26060001', slip_no:'100231', is_date:'2026-06-27', origin:'MAIN COLD STORAGE',
+    issued_by:'J. CRUZ', transport:'M. DRIVER', checker:'R. CHECKER', received_by:'BRANCH RCV',
+    items:[{line_no:1,item:'PORK BELLY',brand:'PRIME',number_of_boxes:8,net_weight:80,actual_weight:79.5},
+           {line_no:2,item:'CHICKEN BREAST',brand:'FRESH VALLEY',number_of_boxes:12,net_weight:120,actual_weight:119}] };
+  function drawPreview(){
+    const pv=$('#calPreview'); const W=pv.clientWidth||560; const sc=W/cfg.page.w; const H=cfg.page.h*sc;
+    pv.style.height=H+'px';
+    const fs=(cfg.fontSize||9)*sc;
+    const t=(p,txt,align)=>{ if(!p)return''; const a=align==='right'?'transform:translateX(-100%);':(align==='center'?'transform:translateX(-50%);':'');
+      return `<div style="position:absolute;left:${p.x*sc}px;top:${(p.y-(cfg.fontSize||9))*sc}px;font:${fs}px Helvetica,Arial;white-space:nowrap;${a}">${esc(txt)}</div>`; };
+    let html='';
+    html+=t(cm.is_code,sample.is_code); html+=t(cm.slip_no,sample.slip_no);
+    html+=t(cm.date,sample.is_date); html+=t(cm.origin,sample.origin);
+    sample.items.forEach((it,i)=>{ const y=cm.rowTop+i*cm.rowHeight;
+      html+=t({x:cm.cols.item,y},it.item); html+=t({x:cm.cols.brand,y},it.brand);
+      html+=t({x:cm.cols.boxes,y},fmt(it.number_of_boxes),'right');
+      html+=t({x:cm.cols.net,y},fmt(it.net_weight),'right');
+      html+=t({x:cm.cols.actual,y},fmt(it.actual_weight),'right'); });
+    html+=t(cm.sign.issued_by,sample.issued_by,'center'); html+=t(cm.sign.transport,sample.transport,'center');
+    html+=t(cm.sign.checker,sample.checker,'center'); html+=t(cm.sign.received_by,sample.received_by,'center');
+    pv.innerHTML=html;
+  }
+  v.querySelectorAll('input[data-path]').forEach(inp=>inp.oninput=()=>{
+    setPath(cfg, inp.dataset.path, Number(inp.value));
+    drawPreview();
+  });
+  $('#calReset').onclick=()=>{ if(confirm('Reset all positions to the default (MEATPLUS-based) layout?')){ SETTINGS=JSON.parse(JSON.stringify(DEFAULT_SETTINGS)); renderISForm(v); } };
+  $('#calTest').onclick=async()=>{
+    const { data } = await sb.from('fsisrr_issue_slips').select('*, items:fsisrr_issue_items(*)').order('created_at',{ascending:false}).limit(1).maybeSingle();
+    const prev=SETTINGS; SETTINGS=cfg; printIS(data||sample); SETTINGS=prev;
+  };
+  $('#calSave').onclick=async()=>{
+    const btn=$('#calSave'); btn.disabled=true; btn.textContent='Saving…';
+    const { error } = await sb.from('fsisrr_issue_settings').update({ config:cfg, updated_at:new Date().toISOString(), updated_by:ME.id }).eq('id',1);
+    btn.disabled=false; btn.textContent='Save Calibration';
+    if(error){ toast('Error: '+error.message); return; }
+    SETTINGS=JSON.parse(JSON.stringify(cfg)); toast('Calibration saved');
+  };
+  setTimeout(drawPreview,30);
+}
 
 /* ====================== START ====================== */
 sb.auth.onAuthStateChange((_e,session)=>{ if(!session){ /* logged out */ } });
