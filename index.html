@@ -464,7 +464,8 @@ async function saveRR(m,rep){
       await sb.from('fsisrr_reports').update(payload).eq('id',reportId);
       await sb.from('fsisrr_items').delete().eq('report_id',reportId);
     }else{
-      const { data:code, error:ce } = await sb.rpc('fsisrr_next_rr',{ p_date:date });
+      const enc=((ME.full_name||ME.email||'').trim().split(/\s+/).map(w=>w[0]||'').join('').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,4))||'XX';
+      const { data:code, error:ce } = await sb.rpc('fsisrr_next_rr',{ p_date:date, p_enc:enc });
       if(ce) throw ce;
       payload.rrcode=code;
       const { data:ins, error } = await sb.from('fsisrr_reports').insert(payload).select('id').single();
