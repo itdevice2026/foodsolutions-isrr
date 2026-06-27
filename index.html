@@ -853,7 +853,7 @@ function printIS(s){
   const cfg = (SETTINGS && SETTINGS.calMap) ? SETTINGS : DEFAULT_SETTINGS;
   const cm = cfg.calMap;
   const pw = (cfg.page&&cfg.page.w)||612, ph=(cfg.page&&cfg.page.h)||396;
-  const doc = new window.jspdf.jsPDF({ unit:'pt', format:[pw,ph] });
+  const doc = new window.jspdf.jsPDF({ unit:'pt', orientation:(pw>=ph?'landscape':'portrait'), format:[pw,ph] });
   doc.setFont(cfg.font||'helvetica','normal');
   doc.setFontSize(cfg.fontSize||9);
   const put=(p,t,align)=>{ if(!p||t==null||t==='')return; doc.text(String(t), p.x, p.y, align?{align:align}:undefined); };
