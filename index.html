@@ -168,7 +168,9 @@ tbody tr:hover{background:#f8fafc}
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script>
+if(window.pdfjsLib){ pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; }
 /* ====================== CONFIG ====================== */
 const SUPABASE_URL = "https://emkcwukiqxnvcbhkjiqz.supabase.co";
 const SUPABASE_KEY = "sb_publishable_u_qnmEI8oHI9Z_A0-Hht3Q_Yvaa7Ork";
@@ -835,10 +837,10 @@ function renderISForm(v){
     <div class="card" style="padding:12px">
       <div id="calStage" style="position:relative;width:100%;background:#fff center/100% 100% no-repeat;border:1px solid var(--line);overflow:hidden"></div>
       <div id="calNoImg" style="text-align:center;padding:40px 20px;color:var(--muted)">
-        <p style="margin:0 0 14px">Upload a scan or photo of your <b>blank Issue Slip form</b> to calibrate the fields on top of it.</p>
-        <button class="btn sm" id="calUpload">Upload form image</button>
+        <p style="margin:0 0 14px">Upload a <b>PDF or image</b> scan of your <b>blank Issue Slip form</b> to calibrate the fields on top of it.</p>
+        <button class="btn sm" id="calUpload">Upload form (PDF or image)</button>
       </div>
-      <input type="file" id="calFile" accept="image/*" class="hidden">
+      <input type="file" id="calFile" accept="image/*,application/pdf,.pdf" class="hidden">
     </div>
     <div class="toolbar" style="justify-content:flex-end;margin-top:14px">
       <button class="btn sm gray" id="calReplace">Change image</button>
@@ -947,7 +949,30 @@ function renderISForm(v){
     }; img.src=r.result; };
     r.readAsDataURL(file);
   }
-  $('#calFile').onchange=e=>{ if(e.target.files[0]) loadImage(e.target.files[0]); };
+  function loadPdf(file){
+    if(!window.pdfjsLib){ toast('PDF engine not loaded — check your connection'); return; }
+    toast('Rendering PDF…');
+    const r=new FileReader();
+    r.onload=()=>{
+      pdfjsLib.getDocument({data:new Uint8Array(r.result)}).promise.then(pdf=>pdf.getPage(1)).then(page=>{
+        const vp1=page.getViewport({scale:1});           // true size in points
+        cfg.page={ w:Math.round(vp1.width), h:Math.round(vp1.height) };
+        const rsc=Math.min(2.5, 1400/vp1.width);
+        const vp=page.getViewport({scale:rsc});
+        const cv=document.createElement('canvas'); cv.width=Math.round(vp.width); cv.height=Math.round(vp.height);
+        return page.render({canvasContext:cv.getContext('2d'), viewport:vp}).promise.then(()=>{
+          cfg.bgImage=cv.toDataURL('image/jpeg',0.82); renderStage();
+        });
+      }).catch(err=>toast('PDF error: '+err.message));
+    };
+    r.readAsArrayBuffer(file);
+  }
+  function loadFormFile(file){
+    if(!file) return;
+    const isPdf = file.type==='application/pdf' || /\.pdf$/i.test(file.name);
+    if(isPdf) loadPdf(file); else loadImage(file);
+  }
+  $('#calFile').onchange=e=>{ loadFormFile(e.target.files[0]); e.target.value=''; };
   $('#calUpload').onclick=()=>$('#calFile').click();
   $('#calReplace').onclick=()=>$('#calFile').click();
   $('#calFont').onchange=()=>{ cfg.font=$('#calFont').value; renderStage(); };
@@ -971,11 +996,11 @@ function renderISForm(v){
   setTimeout(renderStage,40);
 }
 
-
 /* ====================== START ====================== */
 sb.auth.onAuthStateChange((_e,session)=>{ if(!session){ /* logged out */ } });
 boot();
 </script>
 </body>
 </html>
+
         
