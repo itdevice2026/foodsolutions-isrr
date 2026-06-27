@@ -783,8 +783,6 @@ function printIS(s){
   doc.setFont(cfg.font||'helvetica','normal');
   doc.setFontSize(cfg.fontSize||9);
   const put=(p,t,align)=>{ if(!p||t==null||t==='')return; doc.text(String(t), p.x, p.y, align?{align:align}:undefined); };
-  put(cm.is_code, s.is_code);
-  put(cm.slip_no, s.slip_no);
   put(cm.date, s.is_date);
   put(cm.origin, s.origin);
   const items=(s.items||[]).sort((a,b)=>a.line_no-b.line_no);
@@ -856,7 +854,6 @@ function renderISForm(v){
   const FIELDS=[
     {k:'date', val:SMP.date, align:'left'},
     {k:'origin', val:SMP.origin, align:'left'},
-    {k:'slip_no', val:SMP.slip_no, align:'left'},
     {k:'col.item', val:SMP.rows[0][0], align:'left'},
     {k:'col.brand', val:SMP.rows[0][1], align:'left'},
     {k:'col.boxes', val:SMP.rows[0][2], align:'right'},
