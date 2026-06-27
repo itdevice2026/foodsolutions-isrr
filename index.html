@@ -757,7 +757,7 @@ function printRR(r){
     <td style="text-align:right">${fmt(it.number_of_boxes)}</td><td style="text-align:right">${fmt(it.net_weight)}</td>
     <td>${esc(it.pd||'')}</td><td>${esc(it.ed||'')}</td><td>${esc(it.remarks||'')}</td></tr>`).join('');
   const tb=items.reduce((a,i)=>a+Number(i.number_of_boxes||0),0), tw=items.reduce((a,i)=>a+Number(i.net_weight||0),0);
-  $('#printArea').innerHTML=`<div class="doc">${docHead('RECEIVING REPORT')}
+  const copy=`<div class="doc">${docHead('RECEIVING REPORT')}
     <div class="d-meta">
       <div><b>RR Code:</b> ${esc(r.rrcode||'')}</div><div><b>Date:</b> ${esc(r.rr_date||'')}</div>
       <div><b>Supplier:</b> ${esc(supMap[r.supplier_id]||'')}</div><div><b>Storage:</b> ${esc(stMap[r.storage_id]||'')}</div>
@@ -770,6 +770,23 @@ function printRR(r){
     <div class="sign">
       ${sign('Prepared By',r.prepared_by)}${sign('Checked By',r.checked_by)}${sign('Verified By',r.verified_by)}${sign('Noted By',r.noted_by)}
     </div></div>`;
+  const pa=$('#printArea');
+  // Two identical copies on one page when the items fit; otherwise a single copy.
+  const twoUp = items.length <= 8;
+  pa.className = twoUp ? 'dup' : '';
+  const dupCss = `<style>
+    #printArea.dup .doc{font-size:10px;padding:4px 2px;page-break-inside:avoid}
+    #printArea.dup .doc .d-co{font-size:14px}
+    #printArea.dup .doc .d-title{font-size:13px}
+    #printArea.dup .doc .d-meta{margin:6px 0}
+    #printArea.dup .doc table th,#printArea.dup .doc table td{padding:2px 5px;font-size:9px}
+    #printArea.dup .doc .sign{margin-top:14px}
+    #printArea.dup .doc .sign .s .ln{margin-top:18px}
+    #printArea .cutline{border-top:1px dashed #999;text-align:center;margin:4px 0 8px;font-size:9px;color:#777;letter-spacing:1px}
+  </style>`;
+  pa.innerHTML = twoUp
+    ? dupCss + copy + `<div class="cutline">— — — — — — — — — — — — — — — — — — — — — — — — — —</div>` + copy
+    : copy;
   window.print();
 }
 // Issue Slip prints as an OVERLAY onto pre-printed half-letter forms:
