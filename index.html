@@ -838,12 +838,12 @@ function renderISForm(v){
       <div id="calStage" style="position:relative;width:100%;background:#fff center/100% 100% no-repeat;border:1px solid var(--line);overflow:hidden"></div>
       <div id="calNoImg" style="text-align:center;padding:40px 20px;color:var(--muted)">
         <p style="margin:0 0 14px">Upload a <b>PDF or image</b> scan of your <b>blank Issue Slip form</b> to calibrate the fields on top of it.</p>
-        <button class="btn sm" id="calUpload">Upload form (PDF or image)</button>
+        <label class="btn sm" for="calFile" id="calUpload" style="display:inline-block">Upload form (PDF or image)</label>
       </div>
       <input type="file" id="calFile" accept="image/*,application/pdf,.pdf" class="hidden">
     </div>
     <div class="toolbar" style="justify-content:flex-end;margin-top:14px">
-      <button class="btn sm gray" id="calReplace">Change image</button>
+      <label class="btn sm gray" for="calFile" id="calReplace" style="display:inline-block">Change form image</label>
       <button class="btn sm gray" id="calReset">Reset all</button>
       <button class="btn sm ghost" id="calTest">Test print</button>
       <button class="btn sm gray" id="calClose">Close</button>
@@ -973,8 +973,7 @@ function renderISForm(v){
     if(isPdf) loadPdf(file); else loadImage(file);
   }
   $('#calFile').onchange=e=>{ loadFormFile(e.target.files[0]); e.target.value=''; };
-  $('#calUpload').onclick=()=>$('#calFile').click();
-  $('#calReplace').onclick=()=>$('#calFile').click();
+  // upload is triggered natively by the <label for="calFile"> buttons (most reliable across browsers)
   $('#calFont').onchange=()=>{ cfg.font=$('#calFont').value; renderStage(); };
   $('#calSize').onchange=()=>{ cfg.fontSize=Number($('#calSize').value); renderStage(); };
   $('#calRowH').oninput=()=>{ cm.rowHeight=Number($('#calRowH').value)||26; renderStage(); };
@@ -1002,5 +1001,3 @@ boot();
 </script>
 </body>
 </html>
-
-        
