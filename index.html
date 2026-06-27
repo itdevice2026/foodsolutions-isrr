@@ -169,6 +169,7 @@ tbody tr:hover{background:#f8fafc}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
 if(window.pdfjsLib){ pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; }
 /* ====================== CONFIG ====================== */
@@ -667,7 +668,7 @@ async function renderMasterCard(d){
   const mount=$(d.mount);
   const inputs=d.cols.map(c=>`<input class="search" id="add_${c}" placeholder="${c}" style="min-width:120px">`).join('');
   mount.innerHTML=`<h3>${d.title} <span class="muted">(${(data||[]).length})</span></h3>
-    <div class="toolbar" style="margin-bottom:12px">${inputs}<button class="btn sm" id="addBtn">Add</button></div>
+    <div class="toolbar" style="margin-bottom:12px">${inputs}<button class="btn sm" id="addBtn">Add</button><button class="btn sm ghost" id="impBtn">Import</button></div>
     <div class="table-wrap" style="max-height:260px"><table><thead><tr>${d.cols.map(c=>`<th>${c}</th>`).join('')}<th></th></tr></thead>
     <tbody>${(data||[]).map(r=>`<tr>${d.cols.map(c=>`<td>${esc(r[c]||'')}</td>`).join('')}
       <td><button class="iconbtn del" data-id="${r.id}">✕</button></td></tr>`).join('')||`<tr><td colspan="${d.cols.length+1}" class="muted" style="padding:14px">No records.</td></tr>`}</tbody></table></div>`;
@@ -679,6 +680,7 @@ async function renderMasterCard(d){
     if(error){ toast('Error: '+error.message); return; }
     await refreshCache(); renderMasterCard(d); toast(d.title+' added');
   };
+  mount.querySelector('#impBtn').onclick=()=>openImport(d);
   mount.querySelectorAll('button[data-id]').forEach(b=>b.onclick=async()=>{
     if(!confirm('Delete this record?')) return;
     const { error }=await sb.from(d.key).delete().eq('id',b.dataset.id);
@@ -688,6 +690,60 @@ async function renderMasterCard(d){
 }
 
 /* ====================== USERS ====================== */
+function openImport(d){
+  const body=`
+    <p class="muted" style="margin-top:0">Add many ${esc(d.title)} at once. Paste one name per line, or choose a CSV/Excel file (first column = name). You can edit the list before importing.</p>
+    <div class="toolbar" style="margin-bottom:10px">
+      <label class="btn sm ghost" for="impFile" style="display:inline-block">Choose CSV / Excel file</label>
+      <input type="file" id="impFile" accept=".csv,.xlsx,.xls,text/csv" class="hidden">
+      <span class="muted" id="impFileName"></span>
+    </div>
+    <textarea id="impText" style="width:100%;height:200px;padding:10px;border:1px solid var(--line);border-radius:8px;font-family:monospace;font-size:13px" placeholder="One name per line, e.g.&#10;PRIME MEATS TRADING&#10;GOLDEN HARVEST FOODS&#10;OCEANIC SEAFOODS"></textarea>
+    <div class="muted" id="impCount" style="margin-top:8px"></div>`;
+  const m=modal('Import '+d.title, body, `<button class="btn sm gray" data-close>Cancel</button><button class="btn sm" id="impGo">Import</button>`);
+  const ta=m.querySelector('#impText');
+  const lines=t=>t.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+  const updateCount=()=>{ const n=lines(ta.value).length; m.querySelector('#impCount').textContent = n?(n+' name(s) ready to import'):''; };
+  ta.oninput=updateCount;
+  m.querySelector('#impFile').onchange=async e=>{
+    const f=e.target.files[0]; if(!f) return;
+    m.querySelector('#impFileName').textContent=f.name;
+    try{
+      let names=[];
+      if(/\.(xlsx|xls)$/i.test(f.name) && window.XLSX){
+        const buf=await f.arrayBuffer();
+        const wb=XLSX.read(buf,{type:'array'});
+        const ws=wb.Sheets[wb.SheetNames[0]];
+        const rows=XLSX.utils.sheet_to_json(ws,{header:1});
+        names=rows.map(r=>String(r[0]==null?'':r[0]).trim());
+      } else {
+        const text=await f.text();
+        names=text.split(/\r?\n/).map(l=>String(l).split(',')[0].trim());
+      }
+      if(names.length && /^(name|supplier|storage|location|item|brand)s?$/i.test(names[0])) names.shift();
+      names=names.filter(Boolean);
+      ta.value=(ta.value.trim()?ta.value.trim()+'\n':'')+names.join('\n');
+      updateCount(); e.target.value='';
+    }catch(err){ toast('Could not read file: '+err.message); }
+  };
+  m.querySelector('#impGo').onclick=async()=>{
+    let names=lines(ta.value);
+    if(!names.length){ toast('Nothing to import'); return; }
+    const seen=new Set(); names=names.filter(n=>{ const k=n.toLowerCase(); if(seen.has(k))return false; seen.add(k); return true; });
+    const { data:ex }=await sb.from(d.key).select('name');
+    const exist=new Set((ex||[]).map(r=>(r.name||'').toLowerCase()));
+    const toAdd=names.filter(n=>!exist.has(n.toLowerCase())).map(n=>({name:n}));
+    if(!toAdd.length){ toast('All names already exist'); return; }
+    const btn=m.querySelector('#impGo'); btn.disabled=true; btn.textContent='Importing…';
+    const { error }=await sb.from(d.key).insert(toAdd);
+    if(error){ toast('Error: '+error.message); btn.disabled=false; btn.textContent='Import'; return; }
+    await refreshCache(); renderMasterCard(d); closeModal();
+    const skipped=names.length-toAdd.length;
+    toast('Imported '+toAdd.length+' '+d.title+(skipped?(' ('+skipped+' duplicates skipped)'):''));
+  };
+  updateCount();
+}
+
 async function renderUsers(v){
   if(!isAdmin()){ v.innerHTML='<div class="card">Admin access required.</div>'; return; }
   v.innerHTML=`<div class="page-head"><h2>Users &amp; Roles</h2>
