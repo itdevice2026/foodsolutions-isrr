@@ -780,11 +780,11 @@ function openAddUser(reload){
       name=m.querySelector('#u_name').value.trim(), role=m.querySelector('#u_role').value;
     if(!email||pass.length<6){ toast('Email and 6+ char password required'); return; }
     const btn=m.querySelector('#createU'); btn.disabled=true; btn.textContent='Creating…';
-    // use a secondary client so admin session is preserved
-    const tmp=supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:false,autoRefreshToken:false}});
-    const { data, error }=await tmp.auth.signUp({ email, password:pass, options:{ data:{ full_name:name } } });
-    if(error){ toast('Error: '+error.message); btn.disabled=false; btn.textContent='Create User'; return; }
-    if(data.user){ await sb.from('fsisrr_profiles').update({ full_name:name, role, email }).eq('id',data.user.id); }
+    // create an already-confirmed user via secure admin-only edge function (no email needed)
+    const { data, error }=await sb.functions.invoke('fsisrr-create-user',{ body:{ email, password:pass, full_name:name, role } });
+    let msg = (data && data.error) ? data.error : null;
+    if(error){ msg = error.message; try{ const j=await error.context.json(); if(j&&j.error) msg=j.error; }catch(_){} }
+    if(msg){ toast('Error: '+msg); btn.disabled=false; btn.textContent='Create User'; return; }
     toast('User created'); closeModal(); reload();
   };
 }
