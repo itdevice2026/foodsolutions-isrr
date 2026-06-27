@@ -811,14 +811,15 @@ function renderISForm(v){
   const cfg = JSON.parse(JSON.stringify((SETTINGS&&SETTINGS.calMap)?SETTINGS:DEFAULT_SETTINGS));
   if(!cfg.page) cfg.page={w:612,h:396};
   const cm = cfg.calMap; cm.cols=cm.cols||{}; cm.sign=cm.sign||{};
-  const SMP={ slip_no:'119851', date:'26-Jun-26', origin:'MSL',
+  const SMP={ date:'26-Jun-26', origin:'MSL',
     rows:[['BEEF BURGER PATTY 700G','GEN','27','20000','25000'],
           ['BEEF DUST','GEN','30','25000','30000'],
           ['PORK SHOULDER','OLYMEL','35','40000','45000']],
     sign:{issued_by:'NOMER STA ANA',transport:'BENJIE SAN DIEGO',checker:'CHECKER',received_by:'ROMMEL EBAROLA'} };
+  const COLS=[['item',0,'left'],['brand',1,'left'],['boxes',2,'right'],['net',3,'right'],['actual',4,'right']];
   v.innerHTML = `
     <div class="page-head"><h2>Print Calibration</h2></div>
-    <p class="muted" style="margin:-6px 0 16px">Drag <b>each</b> highlighted field onto its blank space on the form — date, origin, the first row's five columns (the rows below follow automatically), and each signature. Then Save.</p>
+    <p class="muted" style="margin:-6px 0 16px">Drag <b>every highlighted field</b> onto its place on the form — date, origin, each row's five columns, and the signatures. A column's left/right position and the row spacing apply to all rows automatically. Then Save.</p>
     <div class="grid2" style="margin-bottom:16px">
       <div class="fld"><label>Print font</label>
         <select id="calFont">
@@ -851,88 +852,66 @@ function renderISForm(v){
   $('#calFont').value=cfg.font||'helvetica';
   $('#calSize').value=String(cfg.fontSize||9);
   let scale=1;
-  const FIELDS=[
-    {k:'date', val:SMP.date, align:'left'},
-    {k:'origin', val:SMP.origin, align:'left'},
-    {k:'col.item', val:SMP.rows[0][0], align:'left'},
-    {k:'col.brand', val:SMP.rows[0][1], align:'left'},
-    {k:'col.boxes', val:SMP.rows[0][2], align:'right'},
-    {k:'col.net', val:SMP.rows[0][3], align:'right'},
-    {k:'col.actual', val:SMP.rows[0][4], align:'right'},
-    {k:'sign.issued_by', val:SMP.sign.issued_by, align:'center'},
-    {k:'sign.transport', val:SMP.sign.transport, align:'center'},
-    {k:'sign.checker', val:SMP.sign.checker, align:'center'},
-    {k:'sign.received_by', val:SMP.sign.received_by, align:'center'},
-  ];
-  function getXY(k){
-    if(k.startsWith('col.')){ const c=k.slice(4); return {x:(cm.cols[c]!=null?cm.cols[c]:30), y:(cm.rowTop!=null?cm.rowTop:118)}; }
-    if(k.startsWith('sign.')){ return cm.sign[k.slice(5)]||{x:50,y:330}; }
-    return cm[k]||{x:50,y:60};
-  }
-  function setXY(k,x,y){
-    if(k.startsWith('col.')){ cm.cols[k.slice(4)]=x; cm.rowTop=y; }
-    else if(k.startsWith('sign.')){ cm.sign[k.slice(5)]={x,y}; }
-    else cm[k]={x,y};
-  }
   function fontFam(){ return cfg.font==='times'?'Georgia,serif':(cfg.font==='courier'?'monospace':'Arial,Helvetica,sans-serif'); }
+  function getXY(k){ if(k.indexOf('sign.')===0) return cm.sign[k.slice(5)]||{x:50,y:330}; return cm[k]||{x:50,y:60}; }
+  function setXY(k,x,y){ if(k.indexOf('sign.')===0) cm.sign[k.slice(5)]={x,y}; else cm[k]={x,y}; }
+  function mkChip(text){ const c=document.createElement('div'); c.textContent=text;
+    const fs=Math.max(8,(cfg.fontSize||9)*scale);
+    c.style.cssText=`position:absolute;white-space:nowrap;cursor:move;background:#fde68a;border:1px solid #f59e0b;border-radius:3px;padding:0 3px;color:#1f2937;font:${fs}px ${fontFam()};touch-action:none;user-select:none;z-index:5;`;
+    return c; }
+  function placeChip(chip,x,y,align){ const w=chip.offsetWidth,h=chip.offsetHeight;
+    let left=x*scale; if(align==='right') left-=w; else if(align==='center') left-=w/2;
+    chip.style.left=Math.round(left)+'px'; chip.style.top=Math.round(y*scale-h+2)+'px'; }
+  function drag(chip,onEnd,align){
+    chip.addEventListener('pointerdown',e=>{
+      e.preventDefault(); chip.setPointerCapture(e.pointerId);
+      const sx=e.clientX, sy=e.clientY, ol=chip.offsetLeft, ot=chip.offsetTop;
+      chip.style.zIndex=99; chip.style.boxShadow='0 4px 10px rgba(0,0,0,.3)';
+      function mv(ev){ let nl=ol+(ev.clientX-sx), nt=ot+(ev.clientY-sy);
+        nl=Math.max(0,Math.min(stage.clientWidth-chip.offsetWidth,nl));
+        nt=Math.max(0,Math.min(stage.clientHeight-chip.offsetHeight,nt));
+        chip.style.left=nl+'px'; chip.style.top=nt+'px'; }
+      function up(ev){ chip.releasePointerCapture(e.pointerId);
+        chip.removeEventListener('pointermove',mv); chip.removeEventListener('pointerup',up);
+        const w=chip.offsetWidth,h=chip.offsetHeight;
+        let ax=chip.offsetLeft; if(align==='right') ax+=w; else if(align==='center') ax+=w/2;
+        const ay=chip.offsetTop+h-2;
+        onEnd(ax/scale, ay/scale);
+      }
+      chip.addEventListener('pointermove',mv); chip.addEventListener('pointerup',up);
+    });
+  }
   function renderStage(){
     const hasImg=!!cfg.bgImage;
     $('#calNoImg').style.display=hasImg?'none':'block';
-    $('#calReplace').style.display=hasImg?'':'none';
+    $('#calReplace').style.display=hasImg?'inline-block':'none';
     stage.style.display=hasImg?'block':'none';
     if(!hasImg){ stage.innerHTML=''; return; }
     scale=(stage.clientWidth||800)/cfg.page.w;
     stage.style.height=(cfg.page.h*scale)+'px';
     stage.style.backgroundImage=`url(${cfg.bgImage})`;
-    const fs=Math.max(8,(cfg.fontSize||9)*scale);
     stage.innerHTML='';
-    // ghost rows (2..n) so spacing is visible; non-interactive
-    SMP.rows.forEach((r,i)=>{ if(i===0) return;
-      const y=cm.rowTop + i*(cm.rowHeight||26);
-      [['item',0,'left'],['brand',1,'left'],['boxes',2,'right'],['net',3,'right'],['actual',4,'right']].forEach(([c,ci,al])=>{
-        const x=cm.cols[c]; if(x==null) return;
-        const g=document.createElement('div'); g.textContent=r[ci];
-        g.style.cssText=`position:absolute;white-space:nowrap;pointer-events:none;color:#94a3b8;font:${fs}px ${fontFam()};`;
-        stage.appendChild(g); const w=g.offsetWidth;
-        let left=x*scale; if(al==='right') left-=w;
-        g.style.left=Math.round(left)+'px'; g.style.top=Math.round(y*scale-g.offsetHeight+2)+'px';
-      });
+    // header + signature chips
+    [['date',SMP.date,'left'],['origin',SMP.origin,'left'],
+     ['sign.issued_by',SMP.sign.issued_by,'center'],['sign.transport',SMP.sign.transport,'center'],
+     ['sign.checker',SMP.sign.checker,'center'],['sign.received_by',SMP.sign.received_by,'center']
+    ].forEach(([k,val,al])=>{
+      const chip=mkChip(val); stage.appendChild(chip);
+      const p=getXY(k); placeChip(chip,p.x,p.y,al);
+      drag(chip,(ax,ay)=>{ setXY(k,ax,ay); renderStage(); }, al);
     });
-    // draggable chips
-    FIELDS.forEach(f=>{
-      const chip=document.createElement('div'); chip.textContent=f.val; chip.dataset.k=f.k; chip.dataset.align=f.align;
-      chip.style.cssText=`position:absolute;white-space:nowrap;cursor:move;background:#fde68a;border:1px solid #f59e0b;border-radius:3px;padding:0 3px;color:#1f2937;font:${fs}px ${fontFam()};touch-action:none;user-select:none;z-index:5;`;
-      stage.appendChild(chip);
-      const {x,y}=getXY(f.k); const w=chip.offsetWidth,h=chip.offsetHeight;
-      let left=x*scale; if(f.align==='right') left-=w; else if(f.align==='center') left-=w/2;
-      chip.style.left=Math.round(left)+'px'; chip.style.top=Math.round(y*scale-h+2)+'px';
-      makeDraggable(chip,f.k,f.align);
-    });
-  }
-  function makeDraggable(chip,k,align){
-    chip.addEventListener('pointerdown',e=>{
-      e.preventDefault(); chip.setPointerCapture(e.pointerId);
-      const sx=e.clientX, sy=e.clientY, ol=chip.offsetLeft, ot=chip.offsetTop;
-      chip.style.zIndex=99; chip.style.boxShadow='0 4px 10px rgba(0,0,0,.3)';
-      function mv(ev){
-        let nl=ol+(ev.clientX-sx), nt=ot+(ev.clientY-sy);
-        nl=Math.max(0,Math.min(stage.clientWidth-chip.offsetWidth,nl));
-        nt=Math.max(0,Math.min(stage.clientHeight-chip.offsetHeight,nt));
-        chip.style.left=nl+'px'; chip.style.top=nt+'px';
-      }
-      function up(ev){
-        chip.releasePointerCapture(e.pointerId);
-        chip.removeEventListener('pointermove',mv); chip.removeEventListener('pointerup',up);
-        chip.style.zIndex='5'; chip.style.boxShadow='';
-        const w=chip.offsetWidth,h=chip.offsetHeight;
-        let ax=chip.offsetLeft; if(align==='right') ax+=w; else if(align==='center') ax+=w/2;
-        const ay=chip.offsetTop+h-2;
-        setXY(k, ax/scale, ay/scale);
-        if(k.startsWith('col.')) renderStage(); // reflow row + ghost rows to new rowTop
-        else renderStage();
-      }
-      chip.addEventListener('pointermove',mv); chip.addEventListener('pointerup',up);
-    });
+    // every row's cells are draggable
+    SMP.rows.forEach((r,i)=>{ COLS.forEach(([col,ci,al])=>{
+      const chip=mkChip(r[ci]); stage.appendChild(chip);
+      const x=(cm.cols[col]!=null?cm.cols[col]:30), y=cm.rowTop + i*(cm.rowHeight||26);
+      placeChip(chip,x,y,al);
+      drag(chip,(ax,ay)=>{
+        cm.cols[col]=ax;
+        if(i===0) cm.rowTop=ay; else cm.rowHeight=Math.max(6,(ay-cm.rowTop)/i);
+        $('#calRowH').value=Math.round((cm.rowHeight||26)*10)/10;
+        renderStage();
+      }, al);
+    }); });
   }
   function loadImage(file){
     const r=new FileReader();
@@ -940,9 +919,7 @@ function renderISForm(v){
       const maxW=1200, sc=Math.min(1,maxW/img.width);
       const cv=document.createElement('canvas'); cv.width=Math.round(img.width*sc); cv.height=Math.round(img.height*sc);
       cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
-      cfg.bgImage=cv.toDataURL('image/jpeg',0.72);
-      cfg.page={w:612,h:396}; // keep half-letter landscape page; image stretched to fit
-      renderStage();
+      cfg.bgImage=cv.toDataURL('image/jpeg',0.72); cfg.page={w:612,h:396}; renderStage();
     }; img.src=r.result; };
     r.readAsDataURL(file);
   }
@@ -952,7 +929,7 @@ function renderISForm(v){
     const r=new FileReader();
     r.onload=()=>{
       pdfjsLib.getDocument({data:new Uint8Array(r.result)}).promise.then(pdf=>pdf.getPage(1)).then(page=>{
-        const vp1=page.getViewport({scale:1});           // true size in points
+        const vp1=page.getViewport({scale:1});
         cfg.page={ w:Math.round(vp1.width), h:Math.round(vp1.height) };
         const rsc=Math.min(2.5, 1400/vp1.width);
         const vp=page.getViewport({scale:rsc});
@@ -964,20 +941,16 @@ function renderISForm(v){
     };
     r.readAsArrayBuffer(file);
   }
-  function loadFormFile(file){
-    if(!file) return;
-    const isPdf = file.type==='application/pdf' || /\.pdf$/i.test(file.name);
-    if(isPdf) loadPdf(file); else loadImage(file);
-  }
+  function loadFormFile(file){ if(!file) return; const isPdf=file.type==='application/pdf'||/\.pdf$/i.test(file.name); if(isPdf) loadPdf(file); else loadImage(file); }
   $('#calFile').onchange=e=>{ loadFormFile(e.target.files[0]); e.target.value=''; };
-  // upload is triggered natively by the <label for="calFile"> buttons (most reliable across browsers)
+  // upload triggered natively by the <label for="calFile"> buttons
   $('#calFont').onchange=()=>{ cfg.font=$('#calFont').value; renderStage(); };
   $('#calSize').onchange=()=>{ cfg.fontSize=Number($('#calSize').value); renderStage(); };
   $('#calRowH').oninput=()=>{ cm.rowHeight=Number($('#calRowH').value)||26; renderStage(); };
   $('#calReset').onclick=()=>{ if(confirm('Reset all field positions to defaults? (Keeps your uploaded image.)')){ const img=cfg.bgImage; const d=JSON.parse(JSON.stringify(DEFAULT_SETTINGS)); Object.assign(cfg,d); cfg.bgImage=img; renderISForm(v); } };
   $('#calClose').onclick=()=>route('dashboard');
   $('#calTest').onclick=()=>{
-    const slip={ slip_no:SMP.slip_no, is_date:SMP.date, origin:SMP.origin,
+    const slip={ is_date:SMP.date, origin:SMP.origin,
       issued_by:SMP.sign.issued_by, transport:SMP.sign.transport, checker:SMP.sign.checker, received_by:SMP.sign.received_by,
       items:SMP.rows.map((r,i)=>({line_no:i+1,item:r[0],brand:r[1],number_of_boxes:+r[2],net_weight:+r[3],actual_weight:+r[4]})) };
     const prev=SETTINGS; SETTINGS=cfg; printIS(slip); SETTINGS=prev;
@@ -991,6 +964,7 @@ function renderISForm(v){
   };
   setTimeout(renderStage,40);
 }
+
 
 /* ====================== START ====================== */
 sb.auth.onAuthStateChange((_e,session)=>{ if(!session){ /* logged out */ } });
