@@ -380,20 +380,22 @@ function lineItemRow(it={}){
 }
 function openRRForm(rep){
   const edit=!!rep; const ro=!can('rr.write');
-  const supOpts=CACHE.suppliers.map(s=>`<option value="${s.id}" ${rep&&rep.supplier_id===s.id?'selected':''}>${esc(s.name)}</option>`).join('');
-  const stOpts=CACHE.storages.map(s=>`<option value="${s.id}" ${rep&&rep.storage_id===s.id?'selected':''}>${esc(s.name)}</option>`).join('');
+  const supName = rep ? ((CACHE.suppliers.find(s=>s.id===rep.supplier_id)||{}).name||'') : '';
+  const stName = rep ? ((CACHE.storages.find(s=>s.id===rep.storage_id)||{}).name||'') : '';
   const txOpts=TXN_TYPES.map(t=>`<option ${rep&&rep.transaction_type===t?'selected':''}>${t}</option>`).join('');
   const body=`
     <datalist id="dlItems">${CACHE.items.map(i=>`<option value="${esc(i.name)}">`).join('')}</datalist>
     <datalist id="dlBrands">${CACHE.brands.map(b=>`<option value="${esc(b.name)}">`).join('')}</datalist>
+    <datalist id="dlSuppliers">${CACHE.suppliers.map(s=>`<option value="${esc(s.name)}">`).join('')}</datalist>
+    <datalist id="dlStorages">${CACHE.storages.map(s=>`<option value="${esc(s.name)}">`).join('')}</datalist>
     <div class="grid4">
       <div class="fld"><label>RR Code</label><input id="f_rrcode" value="${esc(rep?.rrcode||'')}" placeholder="Auto on save" readonly></div>
       <div class="fld"><label>RR Date</label><input id="f_date" type="date" value="${rep?.rr_date||today()}"></div>
       <div class="fld"><label>Transaction Type</label><select id="f_txn">${txOpts}</select></div>
-      <div class="fld"><label>Storage Location</label><select id="f_storage"><option value="">—</option>${stOpts}</select></div>
+      <div class="fld"><label>Storage Location</label><input id="f_storage" list="dlStorages" value="${esc(stName)}" placeholder="Type or pick"></div>
     </div>
     <div class="grid4" style="margin-top:14px">
-      <div class="fld"><label>Supplier</label><select id="f_supplier"><option value="">—</option>${supOpts}</select></div>
+      <div class="fld"><label>Supplier</label><input id="f_supplier" list="dlSuppliers" value="${esc(supName)}" placeholder="Type or pick"></div>
       <div class="fld"><label>CV No</label><input id="f_cv" value="${esc(rep?.cv_no||'')}"></div>
       <div class="fld"><label>PO No</label><input id="f_po" value="${esc(rep?.po_no||'')}"></div>
       <div class="fld"><label>Note</label><input id="f_note" value="${esc(rep?.note||'')}"></div>
@@ -443,6 +445,29 @@ function collectLines(m){
   });
   return out;
 }
+// Resolve a master record by typed name; create it if new. Returns its id.
+async function resolveMaster(table, cacheKey, name){
+  name=(name||'').trim(); if(!name) return null;
+  let m=CACHE[cacheKey].find(x=>(x.name||'').toLowerCase()===name.toLowerCase());
+  if(!m){
+    const { data } = await sb.from(table).insert({name}).select().single();
+    if(data){ CACHE[cacheKey].push(data); m=data; }
+  }
+  return m ? m.id : null;
+}
+// Auto-create any new items/brands typed on the line items
+async function ensureItemsBrands(lines){
+  for(const l of lines){
+    if(l.item && !CACHE.items.some(x=>(x.name||'').toLowerCase()===l.item.toLowerCase())){
+      const { data } = await sb.from('fsisrr_item_master').insert({name:l.item, brand:l.brand||null}).select().single();
+      if(data) CACHE.items.push(data);
+    }
+    if(l.brand && !CACHE.brands.some(x=>(x.name||'').toLowerCase()===l.brand.toLowerCase())){
+      const { data } = await sb.from('fsisrr_brand_master').insert({name:l.brand}).select().single();
+      if(data) CACHE.brands.push(data);
+    }
+  }
+}
 async function saveRR(m,rep){
   const btn=m.querySelector('#saveRR'); btn.disabled=true; btn.textContent='Saving…';
   const lines=collectLines(m);
@@ -450,7 +475,8 @@ async function saveRR(m,rep){
   const date=m.querySelector('#f_date').value||today();
   const payload={
     rr_date:date, transaction_type:m.querySelector('#f_txn').value,
-    supplier_id:m.querySelector('#f_supplier').value||null, storage_id:m.querySelector('#f_storage').value||null,
+    supplier_id: await resolveMaster('fsisrr_suppliers','suppliers', m.querySelector('#f_supplier').value),
+    storage_id: await resolveMaster('fsisrr_storages','storages', m.querySelector('#f_storage').value),
     cv_no:m.querySelector('#f_cv').value.trim()||null, po_no:m.querySelector('#f_po').value.trim()||null,
     note:m.querySelector('#f_note').value.trim()||null,
     prepared_by:m.querySelector('#f_prep').value.trim()||null, checked_by:m.querySelector('#f_check').value.trim()||null,
@@ -471,6 +497,7 @@ async function saveRR(m,rep){
       const { data:ins, error } = await sb.from('fsisrr_reports').insert(payload).select('id').single();
       if(error) throw error; reportId=ins.id;
     }
+    await ensureItemsBrands(lines);
     await sb.from('fsisrr_items').insert(lines.map(l=>({...l, report_id:reportId})));
     toast(rep?'Receiving report updated':'Receiving report saved');
     closeModal(); route('rr');
@@ -602,6 +629,7 @@ async function saveIS(m,slip){
       const { data:ins, error } = await sb.from('fsisrr_issue_slips').insert(payload).select('id').single();
       if(error) throw error; slipId=ins.id;
     }
+    await ensureItemsBrands(lines);
     await sb.from('fsisrr_issue_items').insert(lines.map(l=>({...l, slip_id:slipId})));
     toast(slip?'Issue slip updated':'Issue slip saved'); closeModal(); route('is');
   }catch(err){ toast('Error: '+err.message); btn.disabled=false; btn.textContent='Save Issue Slip'; }
