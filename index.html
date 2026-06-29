@@ -825,7 +825,7 @@ function openAddUser(reload){
     let msg = (data && data.error) ? data.error : null;
     if(error){ msg = error.message; try{ const j=await error.context.json(); if(j&&j.error) msg=j.error; }catch(_){} }
     if(msg){ toast('Error: '+msg); btn.disabled=false; btn.textContent='Create User'; return; }
-    toast('User created'); closeModal(); reload();
+    toast((data&&data.linked)?'Existing account linked — they sign in with their current password':'User created'); closeModal(); reload();
   };
 }
 
