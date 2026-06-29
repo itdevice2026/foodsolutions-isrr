@@ -789,8 +789,12 @@ async function renderUsers(v){
     <div class="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Created</th></tr></thead>
     <tbody id="uBody"><tr><td colspan="4" class="muted" style="padding:16px">Loading…</td></tr></tbody></table></div></div>`;
   async function load(){
-    const { data }=await sb.from('fsisrr_profiles').select('*').order('created_at');
-    $('#uBody').innerHTML=(data||[]).map(u=>`<tr>
+    const { data, error }=await sb.from('fsisrr_profiles').select('*').order('created_at');
+    if(error){ const s=await sb.auth.getSession(); if(!s.data.session){ showLogin('Session expired — please sign in again'); return; } toast('Error: '+error.message); }
+    const rows=data||[];
+    if(!rows.length){ const s=await sb.auth.getSession(); if(!s.data.session){ showLogin('Session expired — please sign in again'); return; }
+      $('#uBody').innerHTML=`<tr><td colspan="4" class="muted" style="padding:16px">No users yet. Use “+ Add User” to create one.</td></tr>`; return; }
+    $('#uBody').innerHTML=rows.map(u=>`<tr>
       <td><b>${esc(u.full_name||'')}</b></td><td>${esc(u.email||'')}</td>
       <td><select class="iconbtn" data-id="${u.id}" ${u.id===ME.id?'disabled':''}>
         ${['admin','approver','encoder'].map(r=>`<option ${u.role===r?'selected':''}>${r}</option>`).join('')}
@@ -1078,7 +1082,8 @@ function renderISForm(v){
 
 
 /* ====================== START ====================== */
-sb.auth.onAuthStateChange((_e,session)=>{ if(!session){ /* logged out */ } });
+function showLogin(msg){ ME=null; const a=$('#app'), l=$('#login'); if(a)a.classList.add('hidden'); if(l)l.classList.remove('hidden'); if(msg)toast(msg); }
+sb.auth.onAuthStateChange((event,session)=>{ if((event==='SIGNED_OUT' || !session) && ME){ showLogin('Session expired — please sign in again'); } });
 injectLogos();
 boot();
 </script>
