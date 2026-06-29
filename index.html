@@ -425,10 +425,10 @@ function openRRForm(rep){
     <button type="button" class="btn sm ghost" id="addLine" style="margin-top:10px">+ Add Line</button>
     <div class="sec-title">Signatories</div>
     <div class="grid4">
-      <div class="fld"><label>Prepared By</label><input id="f_prep" value="${esc(rep?.prepared_by||ME.full_name||'')}"></div>
       <div class="fld"><label>Checked By</label><input id="f_check" value="${esc(rep?.checked_by||'')}"></div>
-      <div class="fld"><label>Verified By</label><input id="f_ver" value="${esc(rep?.verified_by||'')}"></div>
+      <div class="fld"><label>Prepared By</label><input id="f_prep" value="${esc(rep?.prepared_by||ME.full_name||'')}"></div>
       <div class="fld"><label>Noted By</label><input id="f_note_by" value="${esc(rep?.noted_by||'')}"></div>
+      <div class="fld"><label>Verified By</label><input id="f_ver" value="${esc(rep?.verified_by||'')}"></div>
     </div>`;
   const foot = ro
     ? `<button class="btn sm gray" data-close>Close</button>`
@@ -953,7 +953,7 @@ function printRR(r){
     <tbody>${rows}<tr><td colspan="4" style="text-align:right"><b>TOTAL</b></td>
       <td style="text-align:right"><b>${fmt(tb)}</b></td><td style="text-align:right"><b>${fmt(tw)}</b></td><td colspan="4"></td></tr></tbody></table>
     <div class="sign">
-      ${sign('Prepared By',r.prepared_by)}${sign('Checked By',r.checked_by)}${sign('Verified By',r.verified_by)}${sign('Noted By',r.noted_by)}
+      ${sign('Checked By',r.checked_by)}${sign('Prepared By',r.prepared_by)}${sign('Noted By',r.noted_by)}${sign('Verified By',r.verified_by)}
     </div></div>`;
   const pa=$('#printArea');
   // Two identical copies on one page when the items fit; otherwise a single copy.
