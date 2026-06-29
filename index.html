@@ -50,8 +50,9 @@ a{color:var(--brand)}
 header.top{background:var(--brand-dark);color:#fff;display:flex;align-items:center;padding:0 18px;height:56px;position:sticky;top:0;z-index:50}
 header.top .logo{font-weight:700;font-size:16px;display:flex;align-items:center;gap:10px}
 header.top .logo .mk{background:var(--accent);width:30px;height:30px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:15px}
-nav.tabs{display:flex;gap:4px;margin-left:26px;flex:1;flex-wrap:wrap}
-nav.tabs button{background:transparent;border:none;color:#bae6e0;padding:8px 13px;border-radius:7px;font-weight:600;font-size:13px}
+nav.tabs{display:flex;gap:4px;margin-left:18px;flex:1 1 auto;min-width:0;flex-wrap:nowrap;overflow-x:auto}
+nav.tabs::-webkit-scrollbar{height:0}
+nav.tabs button{background:transparent;border:none;color:#bae6e0;padding:7px 11px;border-radius:7px;font-weight:600;font-size:13px;white-space:nowrap;flex:0 0 auto}
 nav.tabs button:hover{background:rgba(255,255,255,.12);color:#fff}
 nav.tabs button.active{background:#fff;color:var(--brand-dark)}
 .userbox{display:flex;align-items:center;gap:12px;font-size:13px}
@@ -156,7 +157,7 @@ tbody tr:hover{background:#f8fafc}
       <button data-route="is">Issue Slips</button>
       <button data-route="inventory">Inventory</button>
       <button data-route="masters" data-admin>Masters</button>
-      <button data-route="isform" data-admin>IS Form Setup</button>
+      <button data-route="isform" data-admin>IS Form</button>
       <button data-route="users" data-admin>Users</button>
     </nav>
     <div class="userbox">
