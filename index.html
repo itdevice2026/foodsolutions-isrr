@@ -445,20 +445,34 @@ function openRRForm(rep){
 }
 function bindLineEvents(tb){
   tb.querySelectorAll('.rm').forEach(b=>b.onclick=()=>{ if(tb.children.length>1) b.closest('tr').remove(); });
-  // Auto-fill Brand from the item master; clear it again if the item is removed (unless brand was typed manually)
+  // Description -> auto-fill Brand (and Item Code on RR); clear auto-filled values when the description is removed
   tb.querySelectorAll('.li-item').forEach(inp=>{
     if(inp._brandBound) return; inp._brandBound=true;
-    const br=inp.closest('tr').querySelector('.li-brand');
+    const row=inp.closest('tr');
+    const br=row.querySelector('.li-brand');
     if(br && !br._manualBound){ br._manualBound=true; br.addEventListener('input',()=>{ br._auto=false; }); }
     const fill=()=>{
-      const brEl=inp.closest('tr').querySelector('.li-brand'); if(!brEl) return;
+      const brEl=row.querySelector('.li-brand'); const codeEl=row.querySelector('.li-code');
       const name=inp.value.trim().toLowerCase();
-      if(!name){ if(brEl._auto){ brEl.value=''; brEl._auto=false; } return; }
+      if(!name){ if(brEl&&brEl._auto){ brEl.value=''; brEl._auto=false; } if(codeEl&&codeEl._auto){ codeEl.value=''; codeEl._auto=false; } return; }
       const it=CACHE.items.find(x=>(x.name||'').toLowerCase()===name);
-      if(it && it.brand){ brEl.value=it.brand; brEl._auto=true; }
+      if(it){ if(brEl && it.brand){ brEl.value=it.brand; brEl._auto=true; } if(codeEl && it.code){ codeEl.value=it.code; codeEl._auto=true; } }
     };
-    inp.addEventListener('input',fill);
-    inp.addEventListener('change',fill);
+    inp.addEventListener('input',fill); inp.addEventListener('change',fill);
+  });
+  // Item Code -> auto-fill Description + Brand (RR only)
+  tb.querySelectorAll('.li-code').forEach(inp=>{
+    if(inp._codeBound) return; inp._codeBound=true;
+    const fill=()=>{
+      inp._auto=false;
+      const row=inp.closest('tr');
+      const code=inp.value.trim().toLowerCase(); if(!code) return;
+      const it=CACHE.items.find(x=>(x.code||'').toLowerCase()===code);
+      if(it){ const itemEl=row.querySelector('.li-item'); const brEl=row.querySelector('.li-brand');
+        if(itemEl && it.name) itemEl.value=it.name;
+        if(brEl && it.brand){ brEl.value=it.brand; brEl._auto=true; } }
+    };
+    inp.addEventListener('input',fill); inp.addEventListener('change',fill);
   });
 }
 function collectLines(m){
@@ -716,7 +730,7 @@ async function renderMasters(v){
       <div class="card" id="m_storages"></div>
     </div>`;
   const defs=[
-    {key:'fsisrr_item_master', mount:'#m_items', title:'Items', cols:['name','brand'], cache:'items'},
+    {key:'fsisrr_item_master', mount:'#m_items', title:'Items', cols:['code','name','brand'], labels:{code:'Item Code',name:'Item Description',brand:'Brand'}, cache:'items'},
     {key:'fsisrr_brand_master', mount:'#m_brands', title:'Brands', cols:['name'], cache:'brands'},
     {key:'fsisrr_suppliers', mount:'#m_suppliers', title:'Suppliers', cols:['name'], cache:'suppliers'},
     {key:'fsisrr_storages', mount:'#m_storages', title:'Storage Locations', cols:['name'], cache:'storages'},
@@ -726,10 +740,11 @@ async function renderMasters(v){
 async function renderMasterCard(d){
   const { data } = await sb.from(d.key).select('*').order('name');
   const mount=$(d.mount);
-  const inputs=d.cols.map(c=>`<input class="search" id="add_${c}" placeholder="${c}" style="min-width:120px">`).join('');
+  const lbl=c=>(d.labels&&d.labels[c])||c;
+  const inputs=d.cols.map(c=>`<input class="search" id="add_${c}" placeholder="${lbl(c)}" style="min-width:110px">`).join('');
   mount.innerHTML=`<h3>${d.title} <span class="muted">(${(data||[]).length})</span></h3>
     <div class="toolbar" style="margin-bottom:12px">${inputs}<button class="btn sm" id="addBtn">Add</button><button class="btn sm ghost" id="impBtn">Import</button></div>
-    <div class="table-wrap" style="max-height:260px"><table><thead><tr>${d.cols.map(c=>`<th>${c}</th>`).join('')}<th></th></tr></thead>
+    <div class="table-wrap" style="max-height:260px"><table><thead><tr>${d.cols.map(c=>`<th>${lbl(c)}</th>`).join('')}<th></th></tr></thead>
     <tbody>${(data||[]).map(r=>`<tr>${d.cols.map(c=>`<td>${esc(r[c]||'')}</td>`).join('')}
       <td><button class="iconbtn del" data-id="${r.id}">✕</button></td></tr>`).join('')||`<tr><td colspan="${d.cols.length+1}" class="muted" style="padding:14px">No records.</td></tr>`}</tbody></table></div>`;
   mount.querySelector('#addBtn').onclick=async()=>{
@@ -751,54 +766,66 @@ async function renderMasterCard(d){
 
 /* ====================== USERS ====================== */
 function openImport(d){
+  const cols=d.cols; const lbl=c=>(d.labels&&d.labels[c])||c;
+  const order=cols.map(lbl).join('  ,  ');
+  const ph = cols.length>1
+    ? `${order}\n(columns separated by comma or tab)\nABC-001, BEEF BURGER PATTY 700G, GEN\nABC-002, PORK BELLY, PRIME`
+    : `One per line\nPRIME MEATS TRADING\nGOLDEN HARVEST FOODS`;
   const body=`
-    <p class="muted" style="margin-top:0">Add many ${esc(d.title)} at once. Paste one name per line, or choose a CSV/Excel file (first column = name). You can edit the list before importing.</p>
+    <p class="muted" style="margin-top:0">Import many ${esc(d.title)} at once. Paste rows (columns separated by <b>comma or tab</b>), or choose a CSV/Excel file. Column order: <b>${esc(order)}</b>. A header row is skipped automatically.</p>
     <div class="toolbar" style="margin-bottom:10px">
       <label class="btn sm ghost" for="impFile" style="display:inline-block">Choose CSV / Excel file</label>
       <input type="file" id="impFile" accept=".csv,.xlsx,.xls,text/csv" class="hidden">
       <span class="muted" id="impFileName"></span>
     </div>
-    <textarea id="impText" style="width:100%;height:200px;padding:10px;border:1px solid var(--line);border-radius:8px;font-family:monospace;font-size:13px" placeholder="One name per line, e.g.&#10;PRIME MEATS TRADING&#10;GOLDEN HARVEST FOODS&#10;OCEANIC SEAFOODS"></textarea>
+    <textarea id="impText" style="width:100%;height:200px;padding:10px;border:1px solid var(--line);border-radius:8px;font-family:monospace;font-size:13px" placeholder="${esc(ph)}"></textarea>
     <div class="muted" id="impCount" style="margin-top:8px"></div>`;
   const m=modal('Import '+d.title, body, `<button class="btn sm gray" data-close>Cancel</button><button class="btn sm" id="impGo">Import</button>`);
   const ta=m.querySelector('#impText');
   const lines=t=>t.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
-  const updateCount=()=>{ const n=lines(ta.value).length; m.querySelector('#impCount').textContent = n?(n+' name(s) ready to import'):''; };
+  const splitRow=line=>line.split(/\t|,/).map(s=>s.trim());
+  const isHeader=f=>/^(item\s*code|code|item\s*desc\w*|description|name|item|brand|supplier|storage|location)s?$/i.test((f[0]||'').trim());
+  function parsed(){ let rows=lines(ta.value).map(splitRow); if(rows.length && isHeader(rows[0])) rows=rows.slice(1); return rows; }
+  const nameIdx = cols.indexOf('name')>=0 ? cols.indexOf('name') : 0;
+  const updateCount=()=>{ const n=parsed().filter(r=>(r[nameIdx]||'').trim()).length; m.querySelector('#impCount').textContent=n?(n+' record(s) ready to import'):''; };
   ta.oninput=updateCount;
   m.querySelector('#impFile').onchange=async e=>{
     const f=e.target.files[0]; if(!f) return;
     m.querySelector('#impFileName').textContent=f.name;
     try{
-      let names=[];
+      let rows=[];
       if(/\.(xlsx|xls)$/i.test(f.name) && window.XLSX){
-        const buf=await f.arrayBuffer();
-        const wb=XLSX.read(buf,{type:'array'});
+        const buf=await f.arrayBuffer(); const wb=XLSX.read(buf,{type:'array'});
         const ws=wb.Sheets[wb.SheetNames[0]];
-        const rows=XLSX.utils.sheet_to_json(ws,{header:1});
-        names=rows.map(r=>String(r[0]==null?'':r[0]).trim());
+        rows=XLSX.utils.sheet_to_json(ws,{header:1}).map(r=>(r||[]).map(c=>String(c==null?'':c).trim()));
       } else {
         const text=await f.text();
-        names=text.split(/\r?\n/).map(l=>String(l).split(',')[0].trim());
+        rows=text.split(/\r?\n/).map(l=>splitRow(l));
       }
-      if(names.length && /^(name|supplier|storage|location|item|brand)s?$/i.test(names[0])) names.shift();
-      names=names.filter(Boolean);
-      ta.value=(ta.value.trim()?ta.value.trim()+'\n':'')+names.join('\n');
+      rows=rows.filter(r=>r.some(c=>c&&c.length));
+      const text=rows.map(r=>r.slice(0,cols.length).join(', ')).join('\n');
+      ta.value=(ta.value.trim()?ta.value.trim()+'\n':'')+text;
       updateCount(); e.target.value='';
     }catch(err){ toast('Could not read file: '+err.message); }
   };
   m.querySelector('#impGo').onclick=async()=>{
-    let names=lines(ta.value);
-    if(!names.length){ toast('Nothing to import'); return; }
-    const seen=new Set(); names=names.filter(n=>{ const k=n.toLowerCase(); if(seen.has(k))return false; seen.add(k); return true; });
+    let rows=parsed();
+    const seen=new Set(); const recs=[];
+    rows.forEach(f=>{
+      const rec={}; cols.forEach((c,i)=>{ const v=(f[i]||'').trim(); rec[c]=v||null; });
+      const nm=(rec.name||'').toLowerCase(); if(!nm) return;
+      if(seen.has(nm)) return; seen.add(nm); recs.push(rec);
+    });
+    if(!recs.length){ toast('Nothing to import'); return; }
     const { data:ex }=await sb.from(d.key).select('name');
     const exist=new Set((ex||[]).map(r=>(r.name||'').toLowerCase()));
-    const toAdd=names.filter(n=>!exist.has(n.toLowerCase())).map(n=>({name:n}));
-    if(!toAdd.length){ toast('All names already exist'); return; }
+    const toAdd=recs.filter(r=>!exist.has((r.name||'').toLowerCase()));
+    if(!toAdd.length){ toast('All records already exist'); return; }
     const btn=m.querySelector('#impGo'); btn.disabled=true; btn.textContent='Importing…';
     const { error }=await sb.from(d.key).insert(toAdd);
     if(error){ toast('Error: '+error.message); btn.disabled=false; btn.textContent='Import'; return; }
     await refreshCache(); renderMasterCard(d); closeModal();
-    const skipped=names.length-toAdd.length;
+    const skipped=recs.length-toAdd.length;
     toast('Imported '+toAdd.length+' '+d.title+(skipped?(' ('+skipped+' duplicates skipped)'):''));
   };
   updateCount();
