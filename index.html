@@ -384,7 +384,7 @@ function lineItemRow(it={}){
   const itemOpts=CACHE.items.map(i=>`<option value="${esc(i.name)}">`).join('');
   const brandOpts=CACHE.brands.map(b=>`<option value="${esc(b.name)}">`).join('');
   return `<tr>
-    <td class="narrow"><input class="li-code" value="${esc(it.item_code||'')}" placeholder="Code"></td>
+    <td class="narrow"><input list="dlCodes" class="li-code" value="${esc(it.item_code||'')}" placeholder="Code"></td>
     <td class="desc"><input list="dlItems" class="li-item" value="${esc(it.item||'')}" placeholder="Item description"></td>
     <td><input list="dlBrands" class="li-brand" value="${esc(it.brand||'')}" placeholder="Brand"></td>
     <td class="tiny"><input class="li-boxes num" type="number" step="any" value="${it.number_of_boxes??''}"></td>
@@ -401,7 +401,8 @@ function openRRForm(rep){
   const stName = rep ? ((CACHE.storages.find(s=>s.id===rep.storage_id)||{}).name||'') : '';
   const txOpts=TXN_TYPES.map(t=>`<option ${rep&&rep.transaction_type===t?'selected':''}>${t}</option>`).join('');
   const body=`
-    <datalist id="dlItems">${CACHE.items.map(i=>`<option value="${esc(i.name)}">`).join('')}</datalist>
+    <datalist id="dlItems">${CACHE.items.map(i=>`<option value="${esc(i.name)}">${esc(i.code||'')}</option>`).join('')}</datalist>
+    <datalist id="dlCodes">${CACHE.items.filter(i=>i.code).map(i=>`<option value="${esc(i.code)}">${esc(i.name||'')}</option>`).join('')}</datalist>
     <datalist id="dlBrands">${CACHE.brands.map(b=>`<option value="${esc(b.name)}">`).join('')}</datalist>
     <datalist id="dlSuppliers">${CACHE.suppliers.map(s=>`<option value="${esc(s.name)}">`).join('')}</datalist>
     <datalist id="dlStorages">${CACHE.storages.map(s=>`<option value="${esc(s.name)}">`).join('')}</datalist>
