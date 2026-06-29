@@ -90,6 +90,7 @@ tbody tr:hover{background:#f8fafc}
 
 /* ---------- Modal ---------- */
 .modal-bg{position:fixed;inset:0;background:rgba(15,23,42,.5);display:flex;align-items:flex-start;justify-content:center;z-index:100;padding:24px;overflow:auto}
+.modal.wide{max-width:1180px}
 .modal{background:#fff;border-radius:14px;width:100%;max-width:920px;box-shadow:0 24px 60px rgba(0,0,0,.3)}
 .modal .m-head{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--line)}
 .modal .m-head h3{margin:0;color:var(--brand-dark)}
@@ -104,8 +105,9 @@ tbody tr:hover{background:#f8fafc}
 .fld input:focus,.fld select:focus,.fld textarea:focus{border-color:var(--brand)}
 .lines th,.lines td{padding:6px 6px}
 .lines input,.lines select{width:100%;padding:6px 7px;border:1px solid var(--line);border-radius:6px}
-.lines td.narrow{width:90px}.lines td.tiny{width:58px}
-.lines td.desc{min-width:320px}.lines td.desc input{min-width:320px}
+.lines td.narrow{width:88px}.lines td.tiny{width:56px}
+.lines td.desc{min-width:200px}.lines td.desc input{min-width:200px}
+.lines td.dt{width:120px}.lines td.dt input{width:120px}
 .sec-title{font-size:12px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.5px;margin:18px 0 10px}
 .toast{position:fixed;bottom:22px;right:22px;background:var(--brand-dark);color:#fff;padding:12px 18px;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.25);z-index:200;font-size:14px}
 
@@ -384,8 +386,8 @@ function lineItemRow(it={}){
     <td><input list="dlBrands" class="li-brand" value="${esc(it.brand||'')}" placeholder="Brand"></td>
     <td class="tiny"><input class="li-boxes num" type="number" step="any" value="${it.number_of_boxes??''}"></td>
     <td class="narrow"><input class="li-wt num" type="number" step="any" value="${it.net_weight??''}"></td>
-    <td class="narrow"><input class="li-pd" type="date" value="${it.pd||''}"></td>
-    <td class="narrow"><input class="li-ed" type="date" value="${it.ed||''}"></td>
+    <td class="dt"><input class="li-pd" type="date" value="${it.pd||''}"></td>
+    <td class="dt"><input class="li-ed" type="date" value="${it.ed||''}"></td>
     <td class="narrow"><input class="li-pallet" value="${esc(it.pallet_no||'')}" placeholder="Pallet"></td>
     <td><input class="li-rem" value="${esc(it.remarks||'')}" placeholder="Remarks"></td>
     <td class="tiny"><button type="button" class="iconbtn del rm">✕</button></td></tr>`;
@@ -428,6 +430,7 @@ function openRRForm(rep){
     ? `<button class="btn sm gray" data-close>Close</button>`
     : `<button class="btn sm gray" data-close>Cancel</button><button class="btn sm" id="saveRR">${edit?'Update':'Save'} Receiving Report</button>`;
   const m=modal((edit?'Edit ':'New ')+'Receiving Report', body, foot);
+  m.classList.add('wide');
   const liBody=m.querySelector('#liBody');
   const lines=(rep?.items||[]).sort((a,b)=>a.line_no-b.line_no);
   (lines.length?lines:[{}]).forEach(it=>liBody.insertAdjacentHTML('beforeend',lineItemRow(it)));
