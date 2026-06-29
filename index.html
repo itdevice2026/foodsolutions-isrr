@@ -439,13 +439,17 @@ function openRRForm(rep){
 }
 function bindLineEvents(tb){
   tb.querySelectorAll('.rm').forEach(b=>b.onclick=()=>{ if(tb.children.length>1) b.closest('tr').remove(); });
-  // Auto-fill Brand from the item master when an item is chosen/typed
+  // Auto-fill Brand from the item master; clear it again if the item is removed (unless brand was typed manually)
   tb.querySelectorAll('.li-item').forEach(inp=>{
     if(inp._brandBound) return; inp._brandBound=true;
+    const br=inp.closest('tr').querySelector('.li-brand');
+    if(br && !br._manualBound){ br._manualBound=true; br.addEventListener('input',()=>{ br._auto=false; }); }
     const fill=()=>{
-      const name=inp.value.trim().toLowerCase(); if(!name) return;
+      const brEl=inp.closest('tr').querySelector('.li-brand'); if(!brEl) return;
+      const name=inp.value.trim().toLowerCase();
+      if(!name){ if(brEl._auto){ brEl.value=''; brEl._auto=false; } return; }
       const it=CACHE.items.find(x=>(x.name||'').toLowerCase()===name);
-      if(it && it.brand){ const br=inp.closest('tr').querySelector('.li-brand'); if(br) br.value=it.brand; }
+      if(it && it.brand){ brEl.value=it.brand; brEl._auto=true; }
     };
     inp.addEventListener('input',fill);
     inp.addEventListener('change',fill);
