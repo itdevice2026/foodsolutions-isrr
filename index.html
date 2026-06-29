@@ -105,6 +105,7 @@ tbody tr:hover{background:#f8fafc}
 .lines th,.lines td{padding:6px 6px}
 .lines input,.lines select{width:100%;padding:6px 7px;border:1px solid var(--line);border-radius:6px}
 .lines td.narrow{width:90px}.lines td.tiny{width:58px}
+.lines td.desc{min-width:320px}.lines td.desc input{min-width:320px}
 .sec-title{font-size:12px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.5px;margin:18px 0 10px}
 .toast{position:fixed;bottom:22px;right:22px;background:var(--brand-dark);color:#fff;padding:12px 18px;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.25);z-index:200;font-size:14px}
 
@@ -379,7 +380,7 @@ function lineItemRow(it={}){
   const brandOpts=CACHE.brands.map(b=>`<option value="${esc(b.name)}">`).join('');
   return `<tr>
     <td class="narrow"><input class="li-code" value="${esc(it.item_code||'')}" placeholder="Code"></td>
-    <td><input list="dlItems" class="li-item" value="${esc(it.item||'')}" placeholder="Item description"></td>
+    <td class="desc"><input list="dlItems" class="li-item" value="${esc(it.item||'')}" placeholder="Item description"></td>
     <td><input list="dlBrands" class="li-brand" value="${esc(it.brand||'')}" placeholder="Brand"></td>
     <td class="tiny"><input class="li-boxes num" type="number" step="any" value="${it.number_of_boxes??''}"></td>
     <td class="narrow"><input class="li-wt num" type="number" step="any" value="${it.net_weight??''}"></td>
