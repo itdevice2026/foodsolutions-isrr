@@ -786,26 +786,55 @@ async function renderUsers(v){
   v.innerHTML=`<div class="page-head"><h2>Users &amp; Roles</h2>
     <button class="btn sm accent" id="addUser">+ Add User</button></div>
     <div class="card"><div class="muted" style="margin-bottom:12px">Roles: <b>admin</b> (full access incl. masters/users/delete), <b>approver</b> (encode + delete), <b>encoder</b> (encode RR/IS).</div>
-    <div class="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Created</th></tr></thead>
-    <tbody id="uBody"><tr><td colspan="4" class="muted" style="padding:16px">Loading…</td></tr></tbody></table></div></div>`;
+    <div class="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Created</th><th></th></tr></thead>
+    <tbody id="uBody"><tr><td colspan="5" class="muted" style="padding:16px">Loading…</td></tr></tbody></table></div></div>`;
   async function load(){
     const { data, error }=await sb.from('fsisrr_profiles').select('*').order('created_at');
     if(error){ const s=await sb.auth.getSession(); if(!s.data.session){ showLogin('Session expired — please sign in again'); return; } toast('Error: '+error.message); }
     const rows=data||[];
     if(!rows.length){ const s=await sb.auth.getSession(); if(!s.data.session){ showLogin('Session expired — please sign in again'); return; }
-      $('#uBody').innerHTML=`<tr><td colspan="4" class="muted" style="padding:16px">No users yet. Use “+ Add User” to create one.</td></tr>`; return; }
+      $('#uBody').innerHTML=`<tr><td colspan="5" class="muted" style="padding:16px">No users yet. Use “+ Add User” to create one.</td></tr>`; return; }
+    const byId={}; rows.forEach(u=>byId[u.id]=u);
     $('#uBody').innerHTML=rows.map(u=>`<tr>
       <td><b>${esc(u.full_name||'')}</b></td><td>${esc(u.email||'')}</td>
-      <td><select class="iconbtn" data-id="${u.id}" ${u.id===ME.id?'disabled':''}>
-        ${['admin','approver','encoder'].map(r=>`<option ${u.role===r?'selected':''}>${r}</option>`).join('')}
-      </select></td><td class="muted">${esc((u.created_at||'').slice(0,10))}</td></tr>`).join('');
-    $('#uBody').querySelectorAll('select[data-id]').forEach(s=>s.onchange=async()=>{
-      const { error }=await sb.from('fsisrr_profiles').update({role:s.value}).eq('id',s.dataset.id);
-      toast(error?('Error: '+error.message):'Role updated');
-    });
+      <td><span class="pill ${u.role==='admin'?'red':(u.role==='approver'?'orange':'blue')}">${esc(u.role)}</span></td>
+      <td class="muted">${esc((u.created_at||'').slice(0,10))}</td>
+      <td><button class="iconbtn" data-edit="${u.id}">Edit</button></td></tr>`).join('');
+    $('#uBody').querySelectorAll('button[data-edit]').forEach(b=>b.onclick=()=>openEditUser(byId[b.dataset.edit], load));
   }
   $('#addUser').onclick=()=>openAddUser(load);
   load();
+}
+function openEditUser(u, reload){
+  const body=`<div class="grid2">
+      <div class="fld"><label>Full Name</label><input id="e_name" value="${esc(u.full_name||'')}"></div>
+      <div class="fld"><label>Email</label><input value="${esc(u.email||'')}" disabled></div>
+      <div class="fld"><label>Role</label><select id="e_role">${['admin','approver','encoder'].map(r=>`<option ${u.role===r?'selected':''}>${r}</option>`).join('')}</select></div>
+      <div class="fld"><label>Reset Password (optional)</label><input id="e_pass" placeholder="Leave blank to keep current"></div>
+    </div>
+    <div class="muted" style="margin-top:10px">Setting a password changes their sign-in password (affects all apps that share this login).</div>`;
+  const foot=`<button class="btn sm danger" id="e_remove">Remove from FOODSOLUTIONS</button><span style="flex:1"></span><button class="btn sm gray" data-close>Cancel</button><button class="btn sm" id="e_save">Save</button>`;
+  const m=modal('Edit User', body, foot);
+  m.querySelector('#e_save').onclick=async()=>{
+    const btn=m.querySelector('#e_save'); btn.disabled=true; btn.textContent='Saving…';
+    const name=m.querySelector('#e_name').value.trim(), role=m.querySelector('#e_role').value, pass=m.querySelector('#e_pass').value;
+    const { error }=await sb.from('fsisrr_profiles').update({ full_name:name, role }).eq('id',u.id);
+    if(error){ toast('Error: '+error.message); btn.disabled=false; btn.textContent='Save'; return; }
+    if(pass){
+      if(pass.length<6){ toast('Saved name/role. Password not changed: needs 6+ characters'); closeModal(); reload(); return; }
+      const { data, error:pe }=await sb.functions.invoke('fsisrr-create-user',{ body:{ action:'set_password', userId:u.id, password:pass } });
+      let msg=(data&&data.error)?data.error:null; if(pe){ msg=pe.message; try{const j=await pe.context.json(); if(j&&j.error)msg=j.error;}catch(_){}}
+      if(msg){ toast('Saved name/role, but password reset failed: '+msg); closeModal(); reload(); return; }
+    }
+    toast('User updated'); closeModal(); reload();
+  };
+  m.querySelector('#e_remove').onclick=async()=>{
+    if(u.id===ME.id){ toast("You can't remove your own account"); return; }
+    if(!confirm('Remove '+(u.full_name||u.email)+' from FOODSOLUTIONS?\nTheir login for other apps is not affected.')) return;
+    const { error }=await sb.from('fsisrr_profiles').delete().eq('id',u.id);
+    if(error){ toast('Error: '+error.message); return; }
+    toast('User removed'); closeModal(); reload();
+  };
 }
 function openAddUser(reload){
   const body=`<div class="grid2">
