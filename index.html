@@ -215,6 +215,8 @@ const el = (t,c,h)=>{const e=document.createElement(t);if(c)e.className=c;if(h!=
 const esc = s => (s==null?'':String(s)).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
 const fmt = n => (n==null||n==='')?'':Number(n).toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:2});
 const today = ()=> new Date().toISOString().slice(0,10);
+const fmtDT = ts => { if(!ts) return ''; const d=new Date(ts); const p=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; };
+let PROFMAP={};
 function toast(msg){const t=el('div','toast',esc(msg));$('#toastRoot').appendChild(t);setTimeout(()=>t.remove(),2600);}
 function can(action){ // simple role matrix
   const r=ME?.role||'encoder';
@@ -335,14 +337,17 @@ async function renderRRList(v){
     </div></div>
     <div class="table-wrap"><table><thead><tr>
       <th>RR Code</th><th>Date</th><th>Type</th><th>Supplier</th><th>Storage</th><th>PO No</th>
-      <th class="num">Boxes</th><th class="num">Net Wt</th><th></th></tr></thead>
-      <tbody id="rrBody"><tr><td colspan="9" class="muted" style="padding:18px">Loading…</td></tr></tbody></table></div>`;
+      <th class="num">Boxes</th><th class="num">Net Wt</th><th>Created</th><th></th></tr></thead>
+      <tbody id="rrBody"><tr><td colspan="10" class="muted" style="padding:18px">Loading…</td></tr></tbody></table></div>`;
   if(can('rr.write')) $('#newRR').onclick=()=>openRRForm();
   const search=$('#rrSearch');
   let all=[];
   async function load(){
-    const { data } = await sb.from('fsisrr_reports')
-      .select('*, items:fsisrr_items(number_of_boxes,net_weight)').order('created_at',{ascending:false});
+    const [{ data }, { data:profs }] = await Promise.all([
+      sb.from('fsisrr_reports').select('*, items:fsisrr_items(number_of_boxes,net_weight)').order('created_at',{ascending:false}),
+      sb.from('fsisrr_profiles').select('id,full_name')
+    ]);
+    PROFMAP=Object.fromEntries((profs||[]).map(p=>[p.id,p.full_name]));
     all=data||[]; draw();
   }
   function draw(){
@@ -350,7 +355,7 @@ async function renderRRList(v){
     const supMap=Object.fromEntries(CACHE.suppliers.map(s=>[s.id,s.name]));
     const stMap=Object.fromEntries(CACHE.storages.map(s=>[s.id,s.name]));
     const rows=all.filter(r=>!q||[r.rrcode,supMap[r.supplier_id],r.po_no,r.transaction_type].join(' ').toLowerCase().includes(q));
-    if(!rows.length){ $('#rrBody').innerHTML=`<tr><td colspan="9" class="muted" style="padding:18px">No receiving reports found.</td></tr>`; return; }
+    if(!rows.length){ $('#rrBody').innerHTML=`<tr><td colspan="10" class="muted" style="padding:18px">No receiving reports found.</td></tr>`; return; }
     $('#rrBody').innerHTML=rows.map(r=>{
       const boxes=(r.items||[]).reduce((a,i)=>a+Number(i.number_of_boxes||0),0);
       const wt=(r.items||[]).reduce((a,i)=>a+Number(i.net_weight||0),0);
@@ -359,6 +364,7 @@ async function renderRRList(v){
         <td><span class="pill blue">${esc(r.transaction_type||'')}</span></td>
         <td>${esc(supMap[r.supplier_id]||'')}</td><td>${esc(stMap[r.storage_id]||'')}</td><td>${esc(r.po_no||'')}</td>
         <td class="num">${fmt(boxes)}</td><td class="num">${fmt(wt)}</td>
+        <td><b>${esc(PROFMAP[r.created_by]||r.prepared_by||'—')}</b><br><span class="muted" style="font-size:11px">${esc(fmtDT(r.created_at))}</span></td>
         <td><div class="row-actions">
           <button class="iconbtn" data-act="print" data-id="${r.id}">Print</button>
           <button class="iconbtn" data-act="edit" data-id="${r.id}">${can('rr.write')?'Edit':'View'}</button>
@@ -543,6 +549,7 @@ async function saveRR(m,rep){
       const { data:code, error:ce } = await sb.rpc('fsisrr_next_rr',{ p_date:date, p_enc:enc });
       if(ce) throw ce;
       payload.rrcode=code;
+      payload.created_by=ME.id;
       const { data:ins, error } = await sb.from('fsisrr_reports').insert(payload).select('id').single();
       if(error) throw error; reportId=ins.id;
     }
@@ -562,19 +569,22 @@ async function renderISList(v){
     </div></div>
     <div class="table-wrap"><table><thead><tr>
       <th>IS Code</th><th>Slip No</th><th>Date</th><th>Origin</th><th>Issued By</th><th>Received By</th>
-      <th class="num">Boxes</th><th class="num">Net Wt</th><th></th></tr></thead>
-      <tbody id="isBody"><tr><td colspan="9" class="muted" style="padding:18px">Loading…</td></tr></tbody></table></div>`;
+      <th class="num">Boxes</th><th class="num">Net Wt</th><th>Created</th><th></th></tr></thead>
+      <tbody id="isBody"><tr><td colspan="10" class="muted" style="padding:18px">Loading…</td></tr></tbody></table></div>`;
   if(can('is.write')) $('#newIS').onclick=()=>openISForm();
   const search=$('#isSearch'); let all=[];
   async function load(){
-    const { data } = await sb.from('fsisrr_issue_slips')
-      .select('*, items:fsisrr_issue_items(number_of_boxes,net_weight)').order('created_at',{ascending:false});
+    const [{ data }, { data:profs }] = await Promise.all([
+      sb.from('fsisrr_issue_slips').select('*, items:fsisrr_issue_items(number_of_boxes,net_weight)').order('created_at',{ascending:false}),
+      sb.from('fsisrr_profiles').select('id,full_name')
+    ]);
+    PROFMAP=Object.fromEntries((profs||[]).map(p=>[p.id,p.full_name]));
     all=data||[]; draw();
   }
   function draw(){
     const q=(search.value||'').toLowerCase();
     const rows=all.filter(r=>!q||[r.is_code,r.slip_no,r.origin,r.issued_by].join(' ').toLowerCase().includes(q));
-    if(!rows.length){ $('#isBody').innerHTML=`<tr><td colspan="9" class="muted" style="padding:18px">No issue slips found.</td></tr>`; return; }
+    if(!rows.length){ $('#isBody').innerHTML=`<tr><td colspan="10" class="muted" style="padding:18px">No issue slips found.</td></tr>`; return; }
     $('#isBody').innerHTML=rows.map(r=>{
       const boxes=(r.items||[]).reduce((a,i)=>a+Number(i.number_of_boxes||0),0);
       const wt=(r.items||[]).reduce((a,i)=>a+Number(i.net_weight||0),0);
@@ -582,6 +592,7 @@ async function renderISList(v){
         <td><b>${esc(r.is_code||'-')}</b></td><td>${esc(r.slip_no||'')}</td><td>${esc(r.is_date||'')}</td>
         <td>${esc(r.origin||'')}</td><td>${esc(r.issued_by||'')}</td><td>${esc(r.received_by||'')}</td>
         <td class="num">${fmt(boxes)}</td><td class="num">${fmt(wt)}</td>
+        <td><b>${esc(PROFMAP[r.created_by]||r.issued_by||'—')}</b><br><span class="muted" style="font-size:11px">${esc(fmtDT(r.created_at))}</span></td>
         <td><div class="row-actions">
           <button class="iconbtn" data-act="print" data-id="${r.id}">Print</button>
           <button class="iconbtn" data-act="edit" data-id="${r.id}">${can('is.write')?'Edit':'View'}</button>
