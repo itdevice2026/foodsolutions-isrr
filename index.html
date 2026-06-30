@@ -427,7 +427,7 @@ function openRRForm(rep){
     </div>
     <div class="sec-title">Line Items</div>
     <div class="table-wrap"><table class="lines"><thead><tr>
-      <th>Item Code</th><th>Item Description</th><th>Brand</th><th>Boxes</th><th>Net Wt (Kilos)</th><th>Prod. Date</th><th>Exp. Date</th><th>Pallet No.</th><th>Remarks</th><th></th>
+      <th>Item Code</th><th>Item Description</th><th>Brand</th><th>Boxes</th><th>Net Wt (Kilos)</th><th>Prod Date (mm/dd/yyyy)</th><th>Exp Date (mm/dd/yyyy)</th><th>Pallet No.</th><th>Remarks</th><th></th>
     </tr></thead><tbody id="liBody"></tbody></table></div>
     <button type="button" class="btn sm ghost" id="addLine" style="margin-top:10px">+ Add Line</button>
     <div class="sec-title">Signatories</div>
@@ -961,7 +961,7 @@ function printRR(r){
       <div><b>Transaction:</b> ${esc(r.transaction_type||'')}</div><div><b>PO No:</b> ${esc(r.po_no||'')}</div>
       <div><b>CV No:</b> ${esc(r.cv_no||'')}</div><div><b>Note:</b> ${esc(r.note||'')}</div>
     </div>
-    <table><thead><tr><th>Item Code</th><th>Item Description</th><th>Brand</th><th>Boxes</th><th>Net Wt (Kilos)</th><th>Prod.Date</th><th>Exp.Date</th><th>Pallet No.</th><th>Remarks</th></tr></thead>
+    <table><thead><tr><th>Item Code</th><th>Item Description</th><th>Brand</th><th>Boxes</th><th>Net Wt (Kilos)</th><th>Prod Date (mm/dd/yyyy)</th><th>Exp Date (mm/dd/yyyy)</th><th>Pallet No.</th><th>Remarks</th></tr></thead>
     <tbody>${rows}<tr><td colspan="3" style="text-align:center"><b>TOTAL</b></td>
       <td style="text-align:center"><b>${fmt(tb)}</b></td><td style="text-align:center"><b>${fmt(tw)}</b></td><td colspan="4"></td></tr></tbody></table>
     <div class="sign">
