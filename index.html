@@ -968,23 +968,9 @@ function printRR(r){
       ${sign('Checked By',r.checked_by)}${sign('Prepared By',r.prepared_by)}${sign('Noted By',r.noted_by)}${sign('Verified By',r.verified_by)}
     </div></div>`;
   const pa=$('#printArea');
-  // Two identical copies on one page when the items fit; otherwise a single copy.
-  const twoUp = items.length <= 8;
-  pa.className = twoUp ? 'dup' : '';
-  const dupCss = `<style>
-    @media print{ #printArea.dup{display:flex;flex-direction:column;height:281mm} }
-    #printArea.dup .doc{flex:1 1 0;display:flex;flex-direction:column;font-size:12px;padding:6px 6px;page-break-inside:avoid;overflow:hidden}
-    #printArea.dup .doc .d-co{font-size:18px}
-    #printArea.dup .doc .d-title{font-size:16px}
-    #printArea.dup .doc .d-meta{margin:8px 0;font-size:12px}
-    #printArea.dup .doc table th,#printArea.dup .doc table td{padding:3px 6px;font-size:11px}
-    #printArea.dup .doc .sign{margin-top:auto;padding-top:12px}
-    #printArea.dup .doc .sign .s .nm{margin-top:22px}#printArea.dup .doc .sign .s .ln{margin-top:2px}
-    #printArea .cutline{flex:0 0 auto;border-top:1px dashed #999;text-align:center;margin:2px 0;font-size:9px;color:#777;letter-spacing:1px}
-  </style>`
-  pa.innerHTML = twoUp
-    ? dupCss + copy + `<div class="cutline">— — — — — — — — — — — — — — — — — — — — — — — — — —</div>` + copy
-    : copy;
+  // Single full-page A4 printout
+  pa.className = '';
+  pa.innerHTML = copy;
   window.print();
 }
 // Issue Slip prints as an OVERLAY onto pre-printed half-letter forms:
