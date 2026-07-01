@@ -477,10 +477,11 @@ function bindLineEvents(tb){
     const fill=()=>{
       inp._auto=false;
       const row=inp.closest('tr');
-      const code=inp.value.trim().toLowerCase(); if(!code) return;
+      const itemEl=row.querySelector('.li-item'); const brEl=row.querySelector('.li-brand');
+      const code=inp.value.trim().toLowerCase();
+      if(!code){ if(itemEl) itemEl.value=''; if(brEl){ brEl.value=''; brEl._auto=false; } return; }
       const it=CACHE.items.find(x=>(x.code||'').toLowerCase()===code);
-      if(it){ const itemEl=row.querySelector('.li-item'); const brEl=row.querySelector('.li-brand');
-        if(itemEl && it.name) itemEl.value=it.name;
+      if(it){ if(itemEl && it.name) itemEl.value=it.name;
         if(brEl && it.brand){ brEl.value=it.brand; brEl._auto=true; } }
     };
     inp.addEventListener('input',fill); inp.addEventListener('change',fill);
